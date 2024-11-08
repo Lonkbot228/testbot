@@ -1,8 +1,7 @@
 import logging
 import os
-from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
-from telegram.ext import Dispatcher
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext
 from telegram.ext import BusinessConnectionHandler
 from telegram import filters  # Используем filters с маленькой буквы
 
@@ -15,61 +14,57 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.environ.get("TOKEN")
 
 # Функция для обработки команд
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('Здравствуйте! Я ваш бизнес-бот. Чем могу помочь?')
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text('Здравствуйте! Я ваш бизнес-бот. Чем могу помочь?')
 
 # Обработка входящих бизнес-сообщений
-def handle_business_message(update: Update, context: CallbackContext) -> None:
+async def handle_business_message(update: Update, context: CallbackContext) -> None:
     # Проверка, если сообщение от бизнес-аккаунта
     if update.business_message:
         # Можно сделать любые действия с сообщением, например, отправить ответ
-        update.message.reply_text("Сообщение от бизнес-аккаунта обработано.")
+        await update.message.reply_text("Сообщение от бизнес-аккаунта обработано.")
 
 # Обработка изменений связи с бизнес-аккаунтом
-def handle_business_connection(update: Update, context: CallbackContext) -> None:
+async def handle_business_connection(update: Update, context: CallbackContext) -> None:
     if update.business_connection:
         business_connection = update.business_connection
         logger.info(f"Business connection established with ID: {business_connection.id}")
         
         if business_connection.can_reply:
-            update.message.reply_text("Я могу отвечать от имени вашего бизнес-аккаунта!")
+            await update.message.reply_text("Я могу отвечать от имени вашего бизнес-аккаунта!")
 
 # Функция для отправки сообщений от имени бизнеса
-def send_business_message(update: Update, context: CallbackContext) -> None:
+async def send_business_message(update: Update, context: CallbackContext) -> None:
     if update.business_connection and update.business_connection.can_reply:
         # Отправить сообщение от имени бизнес-аккаунта
-        context.bot.send_message(chat_id=update.message.chat_id, text="Привет, это сообщение от вашего бизнес-бота!", 
-                                 business_connection_id=update.business_connection.id)
+        await context.bot.send_message(chat_id=update.message.chat_id, text="Привет, это сообщение от вашего бизнес-бота!", 
+                                       business_connection_id=update.business_connection.id)
 
 # Обработка ошибок
-def error(update: Update, context: CallbackContext) -> None:
+async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Ошибка: {context.error}')
 
 def main():
-    # Создание объекта бота
-    updater = Updater(BOT_TOKEN)
-
-    # Диспетчер для регистрации обработчиков
-    dispatcher: Dispatcher = updater.dispatcher
+    # Создание объекта приложения (замена Updater на Application)
+    application = Application.builder().token(BOT_TOKEN).build()
 
     # Обработчик команд
-    dispatcher.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('start', start))
 
     # Обработчик бизнес-сообщений
-    dispatcher.add_handler(BusinessConnectionHandler(handle_business_connection))
+    application.add_handler(BusinessConnectionHandler(handle_business_connection))
 
     # Обработчик входящих бизнес-сообщений
-    dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_business_message))  # Используем filters
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_business_message))  # Используем filters
 
     # Обработчик для отправки сообщений от имени бизнеса
-    dispatcher.add_handler(CommandHandler('send_business_message', send_business_message))
+    application.add_handler(CommandHandler('send_business_message', send_business_message))
 
     # Логирование ошибок
-    dispatcher.add_error_handler(error)
+    application.add_error_handler(error)
 
     # Запуск бота
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 if __name__ == '__main__':
     main()
