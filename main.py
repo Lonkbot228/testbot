@@ -1,7 +1,6 @@
 import telebot
 import os
-from telebot.types import Message, BusinessConnection
-from telebot.apihelper import ApiTelegramException
+from telebot.types import Message
 
 # Создайте переменную окружения TOKEN с токеном вашего бота
 bot = telebot.TeleBot(os.environ.get("TOKEN"))
@@ -30,27 +29,19 @@ statistics = {
     "users_banned": 0
 }
 
-# Обработчик для обновлений бизнес-соединений
-@bot.message_handler(func=lambda message: isinstance(message, BusinessConnection))
-def handle_business_connection(message: BusinessConnection):
-    if message.is_enabled:
-        print(f"Бизнес-соединение с пользователем {message.user.username} активировано.")
-    else:
-        print(f"Бизнес-соединение с пользователем {message.user.username} деактивировано.")
-
-# Обработчик для получения сообщений в бизнес-режиме
-@bot.message_handler(func=lambda message: isinstance(message, Message) and message.business_connection_id)
-def handle_business_message(message: Message):
-    # Проверяем, имеет ли бот доступ к чату
-    if message.business_connection.can_reply:
+# Business connection handling
+@bot.message_handler(func=lambda message: message.json.get("business_connection_id"))
+def handle_business_connection(message: Message):
+    if message.json.get("can_reply"):
+        business_connection_id = message.json.get("business_connection_id")
+        # Process messages in business chat
         bot.send_message(
-            message.chat.id,
-            "Это сообщение отправлено от имени бизнес-аккаунта.",
+            business_connection_id,
+            "Привет! Это бизнес-сообщение для управления чатом от имени владельца бизнеса.",
             parse_mode="HTML"
         )
         statistics['messages_sent'] += 1
 
-# Статистика
 @bot.message_handler(commands=['stats'])
 def send_stats(message: Message):
     if message.chat.type == "private" and message.from_user.username == "lonkigor":
