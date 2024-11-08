@@ -1,96 +1,63 @@
-import telebot
+from telegram import Update, Bot, BusinessConnection
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+import logging
 import os
-from telebot.types import Message
 
-# Создайте переменную окружения TOKEN с токеном вашего бота
-bot = telebot.TeleBot(os.environ.get("TOKEN"))
+# Включение логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Контактные данные менеджера
-manager_contact = "<b>@TehnoViktor_Manager</b>"
+# Задайте ваш токен, полученный от @BotFather
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Замените на токен вашего бота или используйте переменную окружения
 
-# Сообщение приветствия с использованием HTML
-warning_message = (
-    f"Здравствуйте, $name$ 👋\n"
-    "Сейчас Вам ответим 👨‍💻\n\n"
-    "<u>ОСТОРОЖНО! Вам могут написать мошенники от нашего имени!</u>\n"
-    "<b>Мы не берем предоплату за товар, у нас все в наличии!</b>\n\n"
-    "Связь с нами: <b>@TehnoViktor_Manager</b>\n"
-    "+79495902364 - <b>Виктор</b>"
-)
+# Инициализация бота и его приложения
+app = Application.builder().token(TELEGRAM_TOKEN).build()
 
-# Словарь для отслеживания, кому отправлено приветственное сообщение
-replied_users = set()
+# Хранение активных бизнес-подключений
+business_connections = {}
 
-# Статистика
-statistics = {
-    "messages_sent": 0,
-    "users_banned": 0
-}
+# Обработчик для команды /start
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text("Здравствуйте! Чем могу помочь?")
 
-@bot.message_handler(commands=['stats'])
-def send_stats(message: Message):
-    if message.chat.type == "private" and message.from_user.username == "lonkigor":
-        bot.send_message(
-            message.chat.id,
-            (f"Статистика бота:\n"
-             f"Отправлено сообщений: {statistics['messages_sent']}\n"
-             f"Забанено пользователей: {statistics['users_banned']}"),
-            parse_mode="HTML"
+# Обработчик бизнес-соединений
+async def handle_business_connection(update: Update, context: CallbackContext):
+    business_connection = update.business_connection
+    if business_connection:
+        business_connections[business_connection.id] = business_connection
+        await context.bot.send_message(
+            business_connection.user_chat_id,
+            f"Бизнес-подключение установлено: {business_connection.user.first_name}"
         )
+        logger.info("Новое бизнес-подключение от %s", business_connection.user.first_name)
 
-# Обработчик обновлений BusinessConnection
-@bot.message_handler(content_types=['business_connection'])
-def handle_business_connection(message: Message):
-    connection = message.business_connection
-    if connection.is_enabled:
-        print(f"Бизнес-соединение установлено с пользователем {connection.user.id}")
-    else:
-        print(f"Бизнес-соединение завершено с пользователем {connection.user.id}")
-
-# Обработка бизнес-сообщений
-@bot.message_handler(content_types=['business_message', 'edited_business_message', 'deleted_business_message'])
-def handle_business_message(message: Message):
-    if message.business_message:
-        user_id = message.business_message.user.id
-        chat_id = message.business_message.chat_id
-        if message.business_message.text:
-            text = message.business_message.text
-            print(f"Бизнес-сообщение от пользователя {user_id}: {text}")
-        # Проверяем, можно ли ответить
-        if message.business_connection.can_reply:
-            bot.send_message(
-                chat_id,
-                f"Здравствуйте, {message.business_message.user.first_name}, чем можем помочь?",
-                parse_mode="HTML"
+# Обработчик сообщений от бизнес-пользователей
+async def handle_business_message(update: Update, context: CallbackContext):
+    if update.message:
+        business_connection_id = update.message.business_connection_id
+        business_connection = business_connections.get(business_connection_id)
+        
+        if business_connection and business_connection.can_reply:
+            response_text = "Спасибо за ваше сообщение! Мы скоро с вами свяжемся."
+            await context.bot.send_message(
+                chat_id=business_connection.user_chat_id,
+                text=response_text,
+                business_connection_id=business_connection.id
             )
+            logger.info("Ответ отправлен бизнес-пользователю: %s", business_connection.user.first_name)
+        else:
+            logger.warning("Нет разрешения на ответ в чате с ID %s", update.message.chat_id)
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message: Message):
-    user_id = message.from_user.id
-    text = message.text.lower()
+# Основной обработчик текстовых сообщений
+async def echo(update: Update, context: CallbackContext):
+    await update.message.reply_text("Спасибо за ваше сообщение. Мы скоро с вами свяжемся!")
 
-    # Игнорируем сообщения от каналов и пользователей с именем "Group"
-    if message.chat.type == "channel" or message.from_user.username == "Group":
-        return
-
-    # Отправка приветственного сообщения при первом сообщении
-    if user_id not in replied_users:
-        # Получаем имя пользователя для подстановки в приветствие
-        bot.reply_to(
-            message,
-            warning_message.replace("$name$", message.from_user.first_name),
-            parse_mode="HTML"
-        )
-        replied_users.add(user_id)
-        statistics['messages_sent'] += 1
-    elif "контакт" in text or "можно купить" in text:
-        bot.reply_to(
-            message,
-            f"Здравствуйте, {message.from_user.first_name}, вот наши контактные данные:\n{manager_contact}",
-            parse_mode="HTML"
-        )
-        statistics['messages_sent'] += 1
+# Регистрация обработчиков
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.BusinessConnection.ALL, handle_business_connection))
+app.add_handler(MessageHandler(filters.BusinessMessage.ALL, handle_business_message))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
 # Запуск бота
-print("Бот запущен...")
-bot.polling()
+if __name__ == "__main__":
+    app.run_polling()
