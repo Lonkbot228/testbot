@@ -1,6 +1,6 @@
 import telebot
 import os
-from telebot.types import Message
+from telebot.types import Message, BusinessConnection
 
 # Создайте переменную окружения TOKEN с токеном вашего бота
 bot = telebot.TeleBot(os.environ.get("TOKEN"))
@@ -29,15 +29,28 @@ statistics = {
     "users_banned": 0
 }
 
-# Business connection handling
-@bot.message_handler(func=lambda message: message.json.get("business_connection_id"))
-def handle_business_connection(message: Message):
-    if message.json.get("can_reply"):
-        business_connection_id = message.json.get("business_connection_id")
-        # Process messages in business chat
-        bot.send_message(
-            business_connection_id,
-            "Привет! Это бизнес-сообщение для управления чатом от имени владельца бизнеса.",
+# Обработка BusinessConnection
+@bot.message_handler(func=lambda message: isinstance(message, BusinessConnection))
+def handle_business_connection(message):
+    business_connection = message.business_connection
+    if business_connection.is_enabled:
+        # Обрабатываем подключение
+        print(f"Бизнес-соединение установлено: {business_connection.id}")
+        # Проверяем, если бот может отвечать от имени бизнеса
+        if business_connection.can_reply:
+            print("Бот может отвечать от имени бизнеса.")
+        else:
+            print("Бот не может отвечать от имени бизнеса.")
+    else:
+        print("Бизнес-соединение неактивно.")
+
+# Обработка бизнес-сообщений
+@bot.message_handler(func=lambda message: isinstance(message, BusinessConnection))
+def handle_business_message(message):
+    if isinstance(message, Message):
+        bot.reply_to(
+            message,
+            f"Сообщение от бизнеса: {message.text}",
             parse_mode="HTML"
         )
         statistics['messages_sent'] += 1
