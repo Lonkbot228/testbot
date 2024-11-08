@@ -1,76 +1,74 @@
-import telebot
+import logging
 import os
-from telebot.types import Message
-from dotenv import load_dotenv  # Импортируем dotenv
+from telegram import Update, Bot
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Dispatcher
+from telegram.ext import BusinessConnectionHandler
 
-# Загружаем переменные окружения из .env файла
-load_dotenv()
+# Включите логирование для отслеживания ошибок и отладочной информации
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Создаем переменную окружения TOKEN с токеном вашего бота
-bot = telebot.TeleBot(os.getenv("TOKEN"))
+# Токен вашего бота из переменной окружения
+BOT_TOKEN = os.environ.get("TOKEN")
 
-# Контактные данные менеджера
-manager_contact = (
-    "<b>@TehnoViktor_Manager</b>"
-)
+# Функция для обработки команд
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text('Здравствуйте! Я ваш бизнес-бот. Чем могу помочь?')
 
-# Сообщение приветствия с использованием HTML
-warning_message = (
-    f"Здравствуйте, $name$ 👋\n"
-    "Сейчас Вам ответим 👨‍💻\n\n"
-    "<u>ОСТОРОЖНО! Вам могут написать мошенники от нашего имени!</u>\n"
-    "<b>Мы не берем предоплату за товар, у нас все в наличии!</b>\n\n"
-    "Связь с нами: <b>@TehnoViktor_Manager</b>\n"
-    "+79495902364 - <b>Виктор</b>"
-)
+# Обработка входящих бизнес-сообщений
+def handle_business_message(update: Update, context: CallbackContext) -> None:
+    # Проверка, если сообщение от бизнес-аккаунта
+    if update.business_message:
+        # Можно сделать любые действия с сообщением, например, отправить ответ
+        update.message.reply_text("Сообщение от бизнес-аккаунта обработано.")
 
-# Словарь для отслеживания, кому отправлено приветственное сообщение
-replied_users = set()
+# Обработка изменений связи с бизнес-аккаунтом
+def handle_business_connection(update: Update, context: CallbackContext) -> None:
+    if update.business_connection:
+        business_connection = update.business_connection
+        logger.info(f"Business connection established with ID: {business_connection.id}")
+        
+        if business_connection.can_reply:
+            update.message.reply_text("Я могу отвечать от имени вашего бизнес-аккаунта!")
 
-# Статистика
-statistics = {
-    "messages_sent": 0,
-    "users_banned": 0
-}
+# Функция для отправки сообщений от имени бизнеса
+def send_business_message(update: Update, context: CallbackContext) -> None:
+    if update.business_connection and update.business_connection.can_reply:
+        # Отправить сообщение от имени бизнес-аккаунта
+        context.bot.send_message(chat_id=update.message.chat_id, text="Привет, это сообщение от вашего бизнес-бота!", 
+                                 business_connection_id=update.business_connection.id)
 
-@bot.message_handler(commands=['stats'])
-def send_stats(message: Message):
-    if message.chat.type == "private" and message.from_user.username == "lonkigor":
-        bot.send_message(
-            message.chat.id,
-            (f"Статистика бота:\n"
-             f"Отправлено сообщений: {statistics['messages_sent']}\n"
-             f"Забанено пользователей: {statistics['users_banned']}"),
-            parse_mode="HTML"
-        )
+# Обработка ошибок
+def error(update: Update, context: CallbackContext) -> None:
+    logger.warning(f'Ошибка: {context.error}')
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message: Message):
-    user_id = message.from_user.id
-    text = message.text.lower()
+def main():
+    # Создание объекта бота
+    updater = Updater(BOT_TOKEN)
 
-    # Игнорируем сообщения от каналов и пользователей с именем "Group"
-    if message.chat.type == "channel" or message.from_user.username == "Group":
-        return
+    # Диспетчер для регистрации обработчиков
+    dispatcher: Dispatcher = updater.dispatcher
 
-    # Отправка приветственного сообщения при первом сообщении
-    if user_id not in replied_users:
-        # Получаем имя пользователя для подстановки в приветствие
-        bot.reply_to(
-            message,
-            warning_message.replace("$name$", message.from_user.first_name),
-            parse_mode="HTML"
-        )
-        replied_users.add(user_id)
-        statistics['messages_sent'] += 1
-    elif "контакт" in text or "можно купить" in text:
-        bot.reply_to(
-            message,
-            f"Здравствуйте, {message.from_user.first_name}, вот наши контактные данные:\n{manager_contact}",
-            parse_mode="HTML"
-        )
-        statistics['messages_sent'] += 1
+    # Обработчик команд
+    dispatcher.add_handler(CommandHandler('start', start))
 
-# Запуск бота
-print("Бот запущен...")
-bot.polling()
+    # Обработчик бизнес-сообщений
+    dispatcher.add_handler(BusinessConnectionHandler(handle_business_connection))
+
+    # Обработчик входящих бизнес-сообщений
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_business_message))
+
+    # Обработчик для отправки сообщений от имени бизнеса
+    dispatcher.add_handler(CommandHandler('send_business_message', send_business_message))
+
+    # Логирование ошибок
+    dispatcher.add_error_handler(error)
+
+    # Запуск бота
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
