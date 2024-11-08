@@ -1,9 +1,10 @@
 import logging
 import os
 from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackContext
 from telegram.ext import Dispatcher
 from telegram.ext import BusinessConnectionHandler
+from telegram import filters  # Используем filters с маленькой буквы
 
 # Включите логирование для отслеживания ошибок и отладочной информации
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -58,7 +59,7 @@ def main():
     dispatcher.add_handler(BusinessConnectionHandler(handle_business_connection))
 
     # Обработчик входящих бизнес-сообщений
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_business_message))
+    dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_business_message))  # Используем filters
 
     # Обработчик для отправки сообщений от имени бизнеса
     dispatcher.add_handler(CommandHandler('send_business_message', send_business_message))
