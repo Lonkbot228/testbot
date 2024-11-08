@@ -1,9 +1,9 @@
 version: 1
-project: viktor
+project: test
 
 repositories:
     viktorbot:
-        url: https://github.com/Lonkbot228/viktorbot.git
+        url: https://github.com/Lonkbot228/testbot.git
         branch: main
         cpu: 1
         cpuFraction: 20
