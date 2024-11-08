@@ -1,14 +1,12 @@
 import telebot
 import os
-from telebot.types import Message, BusinessConnection
+from telebot.types import Message
 
 # Создайте переменную окружения TOKEN с токеном вашего бота
 bot = telebot.TeleBot(os.environ.get("TOKEN"))
 
 # Контактные данные менеджера
-manager_contact = (
-    "<b>@TehnoViktor_Manager</b>"
-)
+manager_contact = "<b>@TehnoViktor_Manager</b>"
 
 # Сообщение приветствия с использованием HTML
 warning_message = (
@@ -29,32 +27,6 @@ statistics = {
     "users_banned": 0
 }
 
-# Обработка BusinessConnection
-@bot.message_handler(func=lambda message: isinstance(message, BusinessConnection))
-def handle_business_connection(message):
-    business_connection = message.business_connection
-    if business_connection.is_enabled:
-        # Обрабатываем подключение
-        print(f"Бизнес-соединение установлено: {business_connection.id}")
-        # Проверяем, если бот может отвечать от имени бизнеса
-        if business_connection.can_reply:
-            print("Бот может отвечать от имени бизнеса.")
-        else:
-            print("Бот не может отвечать от имени бизнеса.")
-    else:
-        print("Бизнес-соединение неактивно.")
-
-# Обработка бизнес-сообщений
-@bot.message_handler(func=lambda message: isinstance(message, BusinessConnection))
-def handle_business_message(message):
-    if isinstance(message, Message):
-        bot.reply_to(
-            message,
-            f"Сообщение от бизнеса: {message.text}",
-            parse_mode="HTML"
-        )
-        statistics['messages_sent'] += 1
-
 @bot.message_handler(commands=['stats'])
 def send_stats(message: Message):
     if message.chat.type == "private" and message.from_user.username == "lonkigor":
@@ -65,6 +37,32 @@ def send_stats(message: Message):
              f"Забанено пользователей: {statistics['users_banned']}"),
             parse_mode="HTML"
         )
+
+# Обработчик обновлений BusinessConnection
+@bot.message_handler(content_types=['business_connection'])
+def handle_business_connection(message: Message):
+    connection = message.business_connection
+    if connection.is_enabled:
+        print(f"Бизнес-соединение установлено с пользователем {connection.user.id}")
+    else:
+        print(f"Бизнес-соединение завершено с пользователем {connection.user.id}")
+
+# Обработка бизнес-сообщений
+@bot.message_handler(content_types=['business_message', 'edited_business_message', 'deleted_business_message'])
+def handle_business_message(message: Message):
+    if message.business_message:
+        user_id = message.business_message.user.id
+        chat_id = message.business_message.chat_id
+        if message.business_message.text:
+            text = message.business_message.text
+            print(f"Бизнес-сообщение от пользователя {user_id}: {text}")
+        # Проверяем, можно ли ответить
+        if message.business_connection.can_reply:
+            bot.send_message(
+                chat_id,
+                f"Здравствуйте, {message.business_message.user.first_name}, чем можем помочь?",
+                parse_mode="HTML"
+            )
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message: Message):
