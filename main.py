@@ -3,7 +3,7 @@ import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext
 from telegram.ext import BusinessConnectionHandler
-from telegram import filters  # Используем filters с маленькой буквы
+from telegram.ext import filters  # Исправленный импорт фильтров
 
 # Включите логирование для отслеживания ошибок и отладочной информации
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
